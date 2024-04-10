@@ -2,10 +2,6 @@ from PythonTools.debug import debug_message, init_debug, error
 from PythonTools.renderer import Menu, clear
 from PythonTools.tools import get_user_input_of_type
 
-HUMAN_LIFE_EXPECTANCY = 0
-MIN_OWNER_AGE = 0
-MIN_OWNER_AGE = 0
-
 num_pets = 0  # prev pets plus posible new pets
 total_cost = 0
 
@@ -25,13 +21,22 @@ class Household:
     def __str__(self):
         return f'Name: {self.name} Disposable income: {self.disposable_income}, Expenditure: {self.household_expenditure}, Floor space: {self.floor_space}'
 
+    def calc_total_cost(self):
+        total_cost = 0
+
+        for pet in self.pets:
+            total_cost += pet.yearly_cost
+
+        return total_cost
+
 class Human:
     experience = []
 
-    def __init__(self, name, spare_time, age):
+    def __init__(self, name, spare_time, age, life_expectancy):
         self.name = name
         self.age = age
         self.spare_time = spare_time
+        self.life_expectancy = life_expectancy
 
     def __str__(self):
         return f'Name: {self.name}, Age: {self.age}, Spare time: {self.spare_time}, Has experience with: {self.experience}'
@@ -67,8 +72,9 @@ def create_human(household):
     name = get_user_input_of_type(str, "Enter the human's name: ")
     age = get_user_input_of_type(int, "Enter the human's age: ")
     spare_time = get_user_input_of_type(float, "Enter the human's spare time: ")
+    life_expectancy = get_user_input_of_type(float, "Enter the human's life expectancy: ")
 
-    human = Human(name, spare_time, age)
+    human = Human(name, spare_time, age, life_expectancy)
 
     # get what the human has experience with
     while True:
@@ -99,34 +105,38 @@ def create_household():
 
 
 def create_menu():
-    menu = Menu("Create Menu", ["Create Household", "Create Pet", "Create Human"])
+    while True:
+        menu = Menu("Create Menu", ["Create Household", "Create Pet", "Create Human", "Back"])
 
-    match menu.get_input():
-        case "Create Pet":
-            if len(households) == 0:
-                error("No households have been created yet, please create a household first.")
-                create_menu()
+        match menu.get_input():
+            case "Create Pet":
+                if len(households) == 0:
+                    error("No households have been created yet, please create a household first.")
+                    create_menu()
+                    return
+
+                hh_name = Menu("Select a household", [household.name for household in households]).get_input()
+                household = [household for household in households if household.name == hh_name][0]
+                create_pet(household)
+            case "Create Human":
+                if len(households) == 0:
+                    error("No households have been created yet, please create a household first.")
+                    create_menu()
+                    return
+
+                hh_name = Menu("Select a household", [household.name for household in households]).get_input()
+                household = [household for household in households if household.name == hh_name][0]
+                create_human(household)
+            case "Create Household":
+                create_household()
+
+            case "Back":
                 return
-
-            hh_name = Menu("Select a household", [household.name for household in households]).get_input()
-            household = [household for household in households if household.name == hh_name][0]
-            create_pet(household)
-        case "Create Human":
-            if len(households) == 0:
-                error("No households have been created yet, please create a household first.")
-                create_menu()
-                return
-
-            hh_name = Menu("Select a household", [household.name for household in households]).get_input()
-            household = [household for household in households if household.name == hh_name][0]
-            create_human(household)
-        case "Create Household":
-            create_household()
 
 def calc_income_eligibility(household, pet, human):
     # Calculate the income eligibility
     available_funds = household.disposable_income - household.household_expenditure
-    funds_with_pet = available_funds / (abs(available_funds) + pet.yearly_cost)
+    funds_with_pet = available_funds / (abs(available_funds) + household.calc_total_cost())
     time_with_pet = human.spare_time / (abs(human.spare_time) + pet.min_time_required)
 
     debug_message(f"Avaliable funds: {available_funds}")
@@ -140,46 +150,41 @@ def calc_floor_space_eligibility(household, pet, human):
     has_experience = human.experience.count(pet.name) > 0
     return (floor + (0.1 * has_experience)) > 0.6
 
+def calc_age_eligibility(human, pet):
+    return (human.life_expectancy - (human.age + pet.life_expectancy)) > 0
+
 def maths_menu():
-    menu = Menu("Maths Menu", ["Calculate total cost", "Calculate income & time eligibility", "Calculate floor space & expeirence eligibility", "Calculate age eligibility"])
-    menu_option = menu.get_input()
 
     # Ask which household to use
-    household = Menu("Select a household", [household.name for household in households]).get_input()
-    household = [household for household in households if household.name == household][0]
-
-    # Ask which pet to use
-    pet = Menu("Select a pet", [pet.name for pet in household.pets]).get_input()
-    pet = [pet for pet in household.pets if pet.name == pet][0]
+    hh_chosen = Menu("Select a household", [household.name for household in households]).get_input()
+    household = [household for household in households if household.name == hh_chosen][0]
 
     # Ask which human to use
-    human = Menu("Select a human", [human.name for human in household.humans]).get_input()
-    human = [human for human in household.humans if human.name == human][0]
+    human_chosen = Menu("Select a human", [human.name for human in household.humans]).get_input()
+    human = [human for human in household.humans if human.name == human_chosen][0]
 
-    match menu_option:
-        case "Calculate total cost":
-            # Calculate the total cost
-            total_cost = sum([pet.yearly_cost for pet in pets])
-            print(f"The total cost is: {total_cost}")
+    overall_eligibility = True
+    message = ""
+    # Loop through each pet
+    for pet in household.pets:
+        household_eligibility = calc_income_eligibility(household, pet, human)
+        floor_eligibility = calc_floor_space_eligibility(household, pet, human)
+        age_eligibility = calc_age_eligibility(human, pet)
 
-        case "Calculate income & time eligibility":
-            household_eligibility = calc_income_eligibility(household, pet, human)
-            if household_eligibility:
-                print("The household is eligible")
-            else:
-                print("The household is not eligible")
+        if not household_eligibility:
+            overall_eligibility = False
+            message += f"{pet.name} is not eligible due to income and time\n"
 
-        case "Calculate floor space & expeirence eligibility":
-            floor_eligibility = calc_floor_space_eligibility(household, pet, human)
-            if floor_eligibility:
-                print("The household is eligible")
-            else:
-                print("The household is not eligible")
+        if not floor_eligibility:
+            overall_eligibility = False
+            message += f"{pet.name} is not eligible due to floor space\n"
 
+        if not age_eligibility:
+            overall_eligibility = False
+            message += f"{pet.name} is not eligible due to age\n"
 
-        case "Calculate age eligibility":
-            # Calculate the age eligibility
-            age_eligibility = human.age - HUMAN_LIFE_EXPECTANCY
+    print(message)
+
 
 def main():
     while True:
@@ -193,20 +198,19 @@ def main():
                 clear()
                 print("Households:")
                 for household in households:
+                    print(f" == Household: {household.name} ==")
                     print(" - " + str(household))
-
-                    print(" - Humans:")
+                    print(" -- Humans:")
                     for human in household.humans:
-                        print(" -- " + str(human))
+                        print(" --- " + str(human))
 
-                    print(" - Pets:")
+                    print(" -- Pets:")
                     for pet in household.pets:
-                        print(" -- " + str(pet))
+                        print(" --- " + str(pet))
 
                 input("Press enter to continue...")
 
             case "Do maths":
-                print("Doing maths")
                 maths_menu()
 
             case "Quit":
