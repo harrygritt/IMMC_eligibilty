@@ -1,12 +1,8 @@
-from PythonTools.debug import debug_message, init_debug, error
+from PythonTools.debug import init_debug, error
 from PythonTools.renderer import Menu, clear
 from PythonTools.tools import get_user_input_of_type
 
-num_pets = 0  # prev pets plus posible new pets
-total_cost = 0
-
 households = []
-
 
 class Household:
     pets = []
@@ -41,7 +37,6 @@ class Human:
     def __str__(self):
         return f'Name: {self.name}, Age: {self.age}, Spare time: {self.spare_time}, Has experience with: {self.experience}'
 
-
 class Pet:
     def __init__(self, name, yearly_cost, min_time_required, min_floor_space, life_expectancy):
         self.name = name
@@ -53,35 +48,33 @@ class Pet:
     def __str__(self):
         return f'Name: {self.name}, Yearly cost: {self.yearly_cost}, Min time required: {self.min_time_required}, Min floor space: {self.min_floor_space}'
 
-
 def create_pet(household):
     # Get the pet's details
-    name = get_user_input_of_type(str, "Enter the pet's name: ")
-    yearly_cost = get_user_input_of_type(float, "Enter the pet's yearly cost: ")
-    min_time_required = get_user_input_of_type(float, "Enter the pet's minimum time required: ")
+    name = get_user_input_of_type(str, "Enter the pet's name and/or species: ")
+    yearly_cost = get_user_input_of_type(float, "Enter the pet's indivudual yearly cost : ")
+    min_time_required = get_user_input_of_type(float, "Enter the pet's minimum time required to be spent with: ")
     min_floor_space = get_user_input_of_type(float, "Enter the pet's minimum floor space: ")
-    life_expectancy = get_user_input_of_type(float, "Enter the pet's life expectancy: ")
+    life_expectancy = get_user_input_of_type(float, "Enter the pet's life expectancy (final age): ")
 
     # Create the pet
     pet = Pet(name, yearly_cost, min_time_required, min_floor_space, life_expectancy)
     household.pets.append(pet)
 
-
 def create_human(household):
     # Get the human's details
     name = get_user_input_of_type(str, "Enter the human's name: ")
-    age = get_user_input_of_type(int, "Enter the human's age: ")
-    spare_time = get_user_input_of_type(float, "Enter the human's spare time: ")
-    life_expectancy = get_user_input_of_type(float, "Enter the human's life expectancy: ")
+    age = get_user_input_of_type(int, "Enter the human's age: ", range(16,99))
+    spare_time = get_user_input_of_type(float, "Enter the human's spare time that can be used to look after pet: ")
+    life_expectancy = get_user_input_of_type(float, "Enter the human's life expectancy (final age): ")
 
     human = Human(name, spare_time, age, life_expectancy)
 
     # get what the human has experience with
     while True:
         options = [pet.name for pet in household.pets]
-        options.append("Done")
+        options.append("Continue")
         experience = Menu("Select what the human has experience with", options).get_input()
-        if experience == "Done":
+        if experience == "Continue":
             break
 
         # Check if the experience is not already in the list
@@ -91,24 +84,20 @@ def create_human(household):
     # Create the human
     household.humans.append(human)
 
-
 def create_household():
     # Get the household's details
     name = get_user_input_of_type(str, "Enter the household's name: ")
     disposable_income = get_user_input_of_type(float, "Enter the household's disposable income: ")
     household_expenditure = get_user_input_of_type(float, "Enter the household's expenditure: ")
-    floor_space = get_user_input_of_type(float, "Enter the household's floor space: ")
+    floor_space = get_user_input_of_type(float, "Enter the household's available floor area: ")
 
     # Create the household
     household = Household(name, disposable_income, household_expenditure, floor_space)
     households.append(household)
 
-
 def create_menu():
     while True:
-        menu = Menu("Create Menu", ["Create Household", "Create Pet", "Create Human", "Back"])
-
-        match menu.get_input():
+        match Menu("Create Menu", ["Create Household", "Create Pet", "Create Human", "Back"]).get_input():
             case "Create Pet":
                 if len(households) == 0:
                     error("No households have been created yet, please create a household first.")
@@ -116,8 +105,8 @@ def create_menu():
                     return
 
                 hh_name = Menu("Select a household", [household.name for household in households]).get_input()
-                household = [household for household in households if household.name == hh_name][0]
-                create_pet(household)
+                create_pet([household for household in households if household.name == hh_name][0])
+                
             case "Create Human":
                 if len(households) == 0:
                     error("No households have been created yet, please create a household first.")
@@ -125,8 +114,7 @@ def create_menu():
                     return
 
                 hh_name = Menu("Select a household", [household.name for household in households]).get_input()
-                household = [household for household in households if household.name == hh_name][0]
-                create_human(household)
+                create_human([household for household in households if household.name == hh_name][0])
             case "Create Household":
                 create_household()
 
@@ -139,19 +127,23 @@ def calc_income_eligibility(household, pet, human):
     funds_with_pet = available_funds / (abs(available_funds) + household.calc_total_cost())
     time_with_pet = human.spare_time / (abs(human.spare_time) + pet.min_time_required)
 
-    debug_message(f"Avaliable funds: {available_funds}")
-    debug_message(f"Funds with pet: {funds_with_pet}")
-    debug_message(f"Time with pet: {time_with_pet}")
+    score = funds_with_pet + time_with_pet
+    print(f"Income Eligibility of Household: {household.name}, Pet: {pet.name}, Human: {human.name} is {score} > 1.5 ({score > 1.5})")
 
-    return (funds_with_pet + time_with_pet) > 1.5
+    return score > 1.5
 
 def calc_floor_space_eligibility(household, pet, human):
     floor = household.floor_space / (abs(household.floor_space) + pet.min_floor_space)
     has_experience = human.experience.count(pet.name) > 0
-    return (floor + (0.1 * has_experience)) > 0.6
+
+    score = floor + (0.1 * has_experience)
+    print(f"Floor Space Eligibility of Household: {household.name}, Pet: {pet.name}, Human: {human.name} is {score} > 0.6 ({score > 0.6})")
+    return score > 0.6
 
 def calc_age_eligibility(human, pet):
-    return (human.life_expectancy - (human.age + pet.life_expectancy)) > 0
+    score = human.life_expectancy - (human.age + pet.life_expectancy)
+    print(f"Age Eligibility of Pet: {pet.name}, Human: {human.name} is {score} > 0 ({score > 0})")
+    return score > 0
 
 def maths_menu():
 
@@ -183,15 +175,25 @@ def maths_menu():
             overall_eligibility = False
             message += f"{pet.name} is not eligible due to age\n"
 
-    print(message)
+    if overall_eligibility:
+        print("Household is eligible")
+    else:
+        print(message)
 
+    input("Press Enter To Continue...")
+
+def setup_example_household():
+    hh = Household("HouseHold (A)", 120000, 60000, 150)
+    hh.pets.append(Pet("John - Cat", 2000, 0.5, 10, 15))
+    hh.humans.append(Human("Harry", 6, 51, 80))
+    households.append(hh)
+    
 
 def main():
+    print("Running Main")
     while True:
-        main_menu = Menu("Main Menu", ["Create Pet/Household/Human", "View All", "Do maths", "Quit"])
-        match main_menu.get_input():
+        match Menu("Main Menu", ["Create Pet/Household/Human", "View All", "Check Eligibilty"]).get_input():
             case "Create Pet/Household/Human":
-                print("Creating a household")
                 create_menu()
 
             case "View All":
@@ -210,13 +212,10 @@ def main():
 
                 input("Press enter to continue...")
 
-            case "Do maths":
+            case "Check Eligibilty":
                 maths_menu()
-
-            case "Quit":
-                print("Quitting")
-
 
 if __name__ == "__main__":
     init_debug()
+    setup_example_household()
     main()
